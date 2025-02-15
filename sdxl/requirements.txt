@@ -1,0 +1,4 @@
+einops
+opencv-python
+transformers
+accelerate

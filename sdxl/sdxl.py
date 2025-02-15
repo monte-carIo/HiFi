@@ -32,11 +32,13 @@ def parse_args():
     
     parser.add_argument("--strength", type=float, default=0.9, help="Strength of the inpainting")
     
-    parser.add_argument("--sparse_path", type=str, default="/workspace/data/sparse/0/", help="Path to COLMAP sparse folder")
-    
     parser.add_argument("--cross_eff", type=float, default=0.8, help="Cross attention coefficent")
     
     parser.add_argument("--kernel_size", type=int, default=60, help="Kernel size for dilation")
+    
+    parser.add_argument("--mask", action="store_true", help="Using the whole mask for inpainting.\
+                                                            use this when the error of view mapper is to large\
+                                                            and need auto correct")
     
     return parser.parse_args()
 
@@ -54,6 +56,30 @@ def prepare_pipe(args):
                             unet_chunk_size=2, num_ref=2))
     return pipe
 
+def ensure_binary_mask(mask_image):
+    # Ensure the mask is binary (0 and 255) after resizing
+    mask_image = mask_image.convert("L")
+    mask_array = np.array(mask_image)
+    mask_array = np.where(mask_array > 127, 255, 0).astype(np.uint8)
+    return Image.fromarray(mask_array)
+
+def dialate_mask(mask_image, args):
+    mask_image = mask_image.convert("L")
+    mask_array = np.array(mask_image)
+
+    kernel_size = args.kernel_size  # Adjust as needed
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+
+    dilated_mask = cv2.dilate(mask_array, kernel, iterations=1)
+
+    scaled_mask = ((dilated_mask > 0) * 255)
+    
+    mask = scaled_mask.astype(np.uint8)
+
+    mask_image = Image.fromarray(mask)
+    return mask_image
+    
+
 def generate(images_folder, masks_folder, output_folder, prompt, pipe, args):
     generator = torch.Generator(device="cuda").manual_seed(0)
     
@@ -68,7 +94,7 @@ def generate(images_folder, masks_folder, output_folder, prompt, pipe, args):
     # Process each image-mask pair
     for file_name in os.listdir(masks_folder):
         if file_name.endswith('png'):
-            image_path = os.path.join(images_folder, file_name.replace("png", "jpg"))
+            image_path = os.path.join(images_folder, file_name)
             mask_path = os.path.join(masks_folder, file_name)
 
             # Ensure the corresponding mask exists
@@ -81,74 +107,29 @@ def generate(images_folder, masks_folder, output_folder, prompt, pipe, args):
             original_size = original_image.size  # (width, height)
             image = original_image.resize((1024, 1024))  # Resize to 1024x1024 for processing
             mask_image = load_image(mask_path)
+            
+            if not args.mask:
+                mask_array = np.array(original_image.convert("L"))
+                mask = np.where(mask_array < 10, 255, 0).astype(np.uint8)
+                if mask.shape != np.array(mask_image.convert("L")).shape:
+                    mask = np.array(Image.fromarray(mask).resize(mask_image.size))
+                mask = np.bitwise_and(mask, np.array(mask_image.convert("L"))* 255)
+                mask_image = Image.fromarray(mask)
+                
             mask_image = mask_image.resize((1024, 1024))
+            mask_image = ensure_binary_mask(mask_image)
+            if args.kernel_size != -1:
+                mask_image = dialate_mask(mask_image, args)
+            breakpoint()
             
-            # Convert the mask to grayscale and a NumPy array
-            mask_image = mask_image.convert("L")
-            mask_array = np.array(mask_image)
-
-            # Define a dilation kernel (structuring element)
-            kernel_size = args.kernel_size  # Adjust as needed
-            kernel = np.ones((kernel_size, kernel_size), np.uint8)
-            new_kernel = np.ones((30, 30), np.uint8)
-
-            # Perform dilation using cv2.dilate
-            dilated_mask = cv2.dilate(mask_array, kernel, iterations=1)
-
-            # Scale the result if needed (e.g., binary mask to 0-255 range)
-            scaled_mask = ((dilated_mask > 0) * 255)
-            
-            mask = scaled_mask.astype(np.uint8)
-
-            # Convert back to PIL Image and save
-            mask_image = Image.fromarray(mask)
-
-            # Convert image to grayscale array
-            image_array = np.array(image.convert("L"))
-
-            # Create mask where pixel values are less than 50
-            another_mask = ((image_array < 30) * 255).astype(np.uint8)
-
-            another_mask = (np.bitwise_and(scaled_mask, another_mask)*255).astype(np.uint8)*255
-
-            # Dilation (dilating the mask)
-            dilated_mask = cv2.dilate(another_mask, new_kernel, iterations=1)  # Using None for a default kernel
-
-            # Convert the dilated mask to an image (0 or 255 values)
-            another_mask_image = Image.fromarray(dilated_mask * 255)  # Multiply by 255 to get a binary mask (white and black)
-
-            black_mask = another_mask * 0
-            black_mask_image = Image.fromarray(black_mask)
-            
-
-            another_mask_image = Image.fromarray(dilated_mask)
-
             # Perform inpainting
             print(f"Processing: {file_name}")
             if args.cross_att:
-                # result = pipe(
-                #     prompt=[prompt]*2,
-                #     image=[image, ref_image],
-                #     mask_image=[mask_image, black_mask_image],
-                #     guidance_scale=2.0,
-                #     num_inference_steps=20,
-                #     strength=0.5,
-                #     generator=generator,
-                # ).images[0]
                 result = pipe(
                     prompt=[prompt]*2,
                     image=[image, ref_image],
-                    mask_image=[another_mask_image, black_mask_image],
-                    guidance_scale=8.0,
-                    num_inference_steps=20,
-                    strength=0.3,
-                    generator=generator,
-                ).images[0]
-                result = pipe(
-                    prompt=[prompt]*2,
-                    image=[result, ref_image],
-                    mask_image=[mask_image, black_mask_image],
-                    guidance_scale=8.0,
+                    mask_image=[mask_image, ref_mask],
+                    guidance_scale=2.0,
                     num_inference_steps=20,
                     strength=0.9,
                     generator=generator,

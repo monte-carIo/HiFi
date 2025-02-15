@@ -1,0 +1,1 @@
+python sdxl.py --cross_att --viewmapped_path ../../../data/7 --data_folder ../../../data/spinnerf-dataset/7 --anchor ../../../data/7/20220819_111635.png --kernel_size -1
