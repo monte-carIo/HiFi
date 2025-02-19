@@ -37,9 +37,9 @@ def write_unique_images_to_txt(folder1, folder2, output_txt_path):
     print(f"Successfully written {len(unique_images)} unique image names to {output_txt_path}")
 
 # Example usage
-folder1 = "/home/meomeo/workspace/data/spinnerf-dataset/7/images_4"  # Replace with the path to the first folder
-folder2 = "/home/meomeo/workspace/data/spinnerf-dataset/7/images_4/label"  # Replace with the path to the second folder
-output_txt_path = "/home/meomeo/workspace/data/spinnerf-dataset/7/sparse/0/test.txt"  # Replace with the desired output text file path
+folder1 = "/root/workspace/data/spinnerf-dataset/10/images_4"  # Replace with the path to the first folder
+folder2 = "/root/workspace/data/spinnerf-dataset/10/images_4/label"  # Replace with the path to the second folder
+output_txt_path = "/root/workspace/data/spinnerf-dataset/10/sparse/0/test.txt"  # Replace with the desired output text file path
 
 
 

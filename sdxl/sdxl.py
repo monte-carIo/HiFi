@@ -9,6 +9,7 @@ import argparse
 from datetime import datetime
 import numpy as np
 import cv2
+from simple_lama_inpainting import SimpleLama
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Inpainting with Stable Diffusion XL")
@@ -40,6 +41,10 @@ def parse_args():
                                                             use this when the error of view mapper is to large\
                                                             and need auto correct")
     
+    parser.add_argument("--lama", action="store_true", help="Using the lama model for inpainting.")
+    
+    parser.add_argument("--num_infer", type=int, default=20, help="Num inference steps")
+    
     return parser.parse_args()
 
 
@@ -60,14 +65,16 @@ def ensure_binary_mask(mask_image):
     # Ensure the mask is binary (0 and 255) after resizing
     mask_image = mask_image.convert("L")
     mask_array = np.array(mask_image)
-    mask_array = np.where(mask_array > 127, 255, 0).astype(np.uint8)
+    mask_array = np.where(mask_array > 0, 255, 0).astype(np.uint8)
     return Image.fromarray(mask_array)
 
 def dialate_mask(mask_image, args):
     mask_image = mask_image.convert("L")
     mask_array = np.array(mask_image)
-
-    kernel_size = args.kernel_size  # Adjust as needed
+    if args:
+        kernel_size = args.kernel_size  # Adjust as needed
+    else:
+        kernel_size = 30
     kernel = np.ones((kernel_size, kernel_size), np.uint8)
 
     dilated_mask = cv2.dilate(mask_array, kernel, iterations=1)
@@ -110,28 +117,31 @@ def generate(images_folder, masks_folder, output_folder, prompt, pipe, args):
             
             if not args.mask:
                 mask_array = np.array(original_image.convert("L"))
-                mask = np.where(mask_array < 10, 255, 0).astype(np.uint8)
+                mask = np.where(mask_array < 30, 255, 0).astype(np.uint8)
                 if mask.shape != np.array(mask_image.convert("L")).shape:
                     mask = np.array(Image.fromarray(mask).resize(mask_image.size))
-                mask = np.bitwise_and(mask, np.array(mask_image.convert("L"))* 255)
+                mask_image = dialate_mask(mask_image, None)
+                mask = np.bitwise_and(mask, np.array(mask_image.convert("L")) * 255)
                 mask_image = Image.fromarray(mask)
                 
             mask_image = mask_image.resize((1024, 1024))
             mask_image = ensure_binary_mask(mask_image)
             if args.kernel_size != -1:
                 mask_image = dialate_mask(mask_image, args)
-            breakpoint()
             
             # Perform inpainting
-            print(f"Processing: {file_name}")
-            if args.cross_att:
+            print(f"Processing: {image_path}")
+            if args.lama:
+                simple_lama = SimpleLama()
+                result = simple_lama(image, mask_image)
+            elif args.cross_att:
                 result = pipe(
                     prompt=[prompt]*2,
                     image=[image, ref_image],
                     mask_image=[mask_image, ref_mask],
                     guidance_scale=2.0,
-                    num_inference_steps=20,
-                    strength=0.9,
+                    num_inference_steps=args.num_infer,
+                    strength=args.strength,
                     generator=generator,
                 ).images[0]
             else:
@@ -140,7 +150,7 @@ def generate(images_folder, masks_folder, output_folder, prompt, pipe, args):
                     image=image,
                     mask_image=mask_image,
                     guidance_scale=8.0,
-                    num_inference_steps=20,
+                    num_inference_steps=args.num_infer,
                     strength=args.strength,
                     generator=generator,
                 ).images[0]

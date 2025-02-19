@@ -6,17 +6,17 @@ import numpy as np
 import torch
 import cv2
 
-init_image = load_image("/workspace/knguyen/gaussian-splatting/output/4/train/ours_30000/depth/00099.png")
+init_image = load_image("/root/workspace/gaussian-splatting/output/10/train/ours_30000/depth/20220823_095135(0).jpg")
 size = init_image.size
 init_image = init_image.resize((1024, 1024))
 
 generator = torch.Generator(device="cpu").manual_seed(0)
 
-mask_image = load_image("/workspace/data/spinnerf-dataset/4/seg/20220819_105840.png")
+mask_image = load_image("/root/workspace/data/spinnerf-dataset/10/images_4/label/20220823_095135(0).png")
 mask_image = mask_image.resize((1024, 1024))
 # Convert the mask to grayscale and a NumPy array
 mask_image = mask_image.convert("L")
-mask_array = np.array(mask_image)
+mask_array = np.array(mask_image) * 255
 
 # Define a dilation kernel (structuring element)
 kernel_size = 150  # Adjust as needed
@@ -31,7 +31,7 @@ scaled_mask = (dilated_mask > 0).astype(np.uint8) * 255
 # Convert back to PIL Image and save
 scaled_mask_image = Image.fromarray(scaled_mask)
 
-control_image = load_image("/workspace/knguyen/sdxl/lama_depth.png")
+control_image = load_image("/root/workspace/HiFi/sdxl/output_chair_depth.jpg")
 control_image = control_image.resize((1024, 1024))
 
 controlnet = ControlNetModel.from_pretrained(

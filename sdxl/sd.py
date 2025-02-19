@@ -9,7 +9,7 @@ pipe = AutoPipelineForInpainting.from_pretrained("diffusers/stable-diffusion-xl-
 
 # img_url = "/workspace/knguyen/gaussian-splatting/output/4/train/ours_30000/depth/00000.png"
 img_url = "/home/meomeo/workspace/data/spinnerf-dataset/book/images_4/20220811_113225.png"
-mask_url = "/home/meomeo/workspace/data/spinnerf-dataset/book/images_4/label/20220811_113225.png"
+mask_url = "/root/workspace/gaussian-splatting/output/9/train/ours_30000/depth/20220819_112915.jpg"
 
 
 image = load_image(img_url)

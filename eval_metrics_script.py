@@ -1,6 +1,7 @@
 """
 Called like so:
-python eval_metrics_script.py --generated_views=/filepath/generated_views_dtu_6 --ground_truth_views=/filepath/gt_views_dtu_6
+python eval_metrics_script.py --generated_views=/root/workspace/gaussian-splatting/output/10/test/ours_30000/renders \
+    --ground_truth_views=/root/workspace/data/spinnerf-dataset/10/images_4
 """
 import os
 import glob
@@ -84,9 +85,11 @@ def main(argv):
         psnr_score = psnr_fn(float32_gen, float32_gt)
         return ssim_score, psnr_score, lpips_score
 
-    images_to_eval = glob.glob(os.path.join(FLAGS.generated_views, "*.png"))
+    images_to_eval = glob.glob(os.path.join(FLAGS.generated_views, "*.png")) \
+                    + glob.glob(os.path.join(FLAGS.generated_views, "*.jpg"))
     files = [os.path.basename(s) for s in images_to_eval]
-    images_gt = glob.glob(os.path.join(FLAGS.ground_truth_views, "*.png"))
+    images_gt = glob.glob(os.path.join(FLAGS.ground_truth_views, "*.png")) \
+                    + glob.glob(os.path.join(FLAGS.ground_truth_views, "*.jpg"))
     files_gt = sorted([os.path.basename(s) for s in images_gt])[:40]
     
 
@@ -101,6 +104,8 @@ def main(argv):
         try:
             gt_im = imageio.imread(os.path.join(FLAGS.ground_truth_views, gt))
             gv_im = imageio.imread(os.path.join(FLAGS.generated_views, k))
+            if gv_im.shape != gt_im.shape:
+                gv_im = tf.image.resize(gv_im, gt_im.shape[:2]).numpy()
         except Exception as e:
             logging.error(f"I/O Error opening filename: {k}. Error: {e}")
             continue
